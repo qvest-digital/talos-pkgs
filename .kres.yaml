@@ -65,6 +65,7 @@ spec:
     #   kernel first, then packages in alphabetical order
     - kernel
     - drbd-pkg
+    - efa-pkg
     - ena-pkg
     - gasket-driver-pkg
     - hailort-pkg

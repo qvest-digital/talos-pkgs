@@ -44,6 +44,11 @@ vars:
   ena_sha256: fdf832ea1f0e91c8217de1cd1c2c1b08c97cdbbd3dda7bd5c45394d3dd040e71
   ena_sha512: 63d53d0377252c8e25486be4d9df5b9af2bbe99916b348ba3960182c5d0cbc82130b636ff28c006de23f6ff9ff526679c3ecbf4ee19ea65660b411c9da66a34c
 
+  # renovate: datasource=github-releases extractVersion=^efa_linux_(?<version>.*)$ depName=amzn/amzn-drivers
+  efa_version: 3.3.0
+  efa_sha256: 8afc125de332621b38ed0887c99966b9a62bf07851ac81056ba7e4e6d2e7bc4a
+  efa_sha512: c79462d66008151539b6173dbbeeb89e058bcf0592fc7ecb057c7aa167ee820120f378cbb8d907c72601f6de1bee6309c993e316c19f41bad693889a9ff61155
+
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 259.5
   systemd_sha256: 80ed55a8a69c4bd1fb12a36659303372b37baf9ee224ef4f032db4b748be0f76
