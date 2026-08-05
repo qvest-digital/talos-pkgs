@@ -112,6 +112,7 @@ TARGETS += zlib
 TARGETS += zstd
 TARGETS += kernel
 TARGETS += drbd-pkg
+TARGETS += efa-pkg
 TARGETS += ena-pkg
 TARGETS += gasket-driver-pkg
 TARGETS += hailort-pkg
