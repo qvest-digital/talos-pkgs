@@ -17,6 +17,8 @@ steps:
     prepare:
       - |
         tar xf efa.tar.gz --strip-components=1
+
+        patch -p1 < /pkg/patches/conftest-udata-to-drv-context.patch
     build:
       # Unlike the ENA driver beside it in this source tree, EFA generates
       # its Kbuild from a template: cmake runs the conftests that decide
@@ -26,9 +28,17 @@ steps:
       # Peer-to-peer memory is off. It compiles against the NVIDIA and
       # Neuron peer-memory interfaces, neither of which this package has,
       # and it is not what the module is needed for here.
+      #
+      # A conftest that fails to compile is indistinguishable from a kernel
+      # that lacks the API: the macro is left undefined and an older code
+      # path is compiled silently. HAVE_UDATA_TO_DRV_CONTEXT is asserted
+      # because its fallback reads a ucontext out of a CQ the RDMA core
+      # zero-allocates, and the driver then dereferences NULL in the
+      # CQ_CREATE ioctl, panicking the kernel on the first fi_cq_open.
       - |
         cd kernel/linux/efa
         cmake -B build -DKERNEL_DIR=/src -DENABLE_P2P=OFF .
+        grep -q '^#define HAVE_UDATA_TO_DRV_CONTEXT 1$' build/src/config.h
         make -C build
     install:
       - |
