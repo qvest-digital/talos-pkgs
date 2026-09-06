@@ -1,0 +1,42 @@
+Fix the HAVE_UDATA_TO_DRV_CONTEXT conftest under clang on Linux 6.18.
+
+The conftest invokes rdma_udata_to_drv_context() as a bare statement and
+discards its value. Since Linux 6.18 the macro casts its null branch:
+
+    (udata ? container_of(...) : (drv_dev_struct *)NULL)
+
+which makes clang report -Wunused-value. The kernel build promotes that to an
+error, so the conftest fails to compile and HAVE_UDATA_TO_DRV_CONTEXT is left
+undefined even though the kernel provides the macro. gcc does not warn here,
+so the failure only shows up on a clang-built kernel.
+
+The driver then compiles its pre-5.1 fallbacks. In efa_create_user_cq() the
+fallback is
+
+    struct efa_ucontext *ucontext = to_ecq(ibcq)->ucontext;
+
+which reads the field out of a CQ the RDMA core has just zero-allocated
+(HAVE_CQ_CORE_ALLOCATION is defined), so ucontext is NULL. It is stored back
+into cq->ucontext and dereferenced a few lines later:
+
+    params.uarn = cq->ucontext->uarn;
+
+That is a NULL pointer dereference at offset 0x70, inside the CQ_CREATE
+ioctl, so every fi_cq_open() against the device panics the kernel.
+
+Assign the result to a variable so the expression is used.
+
+--- a/kernel/linux/efa/config/efa.cmake
++++ b/kernel/linux/efa/config/efa.cmake
+@@ -171,7 +171,10 @@
+   "
+   "
+ struct ib_udata *udata;
+-rdma_udata_to_drv_context(udata, struct efa_ucontext, ibucontext);
++struct efa_ucontext *ucontext;
++
++ucontext = rdma_udata_to_drv_context(udata, struct efa_ucontext, ibucontext);
++(void)ucontext;
+   "
+   HAVE_UDATA_TO_DRV_CONTEXT "")
+ 
