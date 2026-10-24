@@ -7,7 +7,7 @@ dependencies:
   - image: "{{ .LLVM_IMAGE }}:{{ .TOOLS_REV }}"
 steps:
   - sources:
-      - url: https://github.com/danielclasen/mxlfs/archive/{{ .mxlfs_ref }}.tar.gz
+      - url: https://github.com/danielclasen/mxlfs/releases/download/v{{ .mxlfs_version }}/mxlfs-{{ .mxlfs_version }}.tar.gz
         destination: mxlfs.tar.gz
         sha256: "{{ .mxlfs_sha256 }}"
         sha512: "{{ .mxlfs_sha512 }}"
