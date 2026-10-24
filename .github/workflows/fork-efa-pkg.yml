@@ -67,9 +67,17 @@ jobs:
       # PLATFORM is amd64 only: the EFA device exists on x86 instance
       # types here, and building both doubles a build already measured in
       # tens of minutes.
+      # The kernel stage is most of an hour and the same for every build at
+      # one pkgs revision, so it is cached in the registry, shared with the
+      # other module packages of this fork: after the first build at a
+      # revision, a module change rebuilds the module alone. The cache holds
+      # the signing key that kernel build generated; nothing the fork builds
+      # ships that kernel, so the key signs only these modules.
       - name: build and push efa-pkg
         env:
           PKGS_TAG: v1.13.0-43-gd8c80cc
+          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.13.0-43-gd8c80cc
         run: |
           make efa-pkg PUSH=true PLATFORM=linux/amd64 \
-            USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}"
+            USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}" \
+            CI_ARGS="--cache-from=type=registry,ref=${CACHE} --cache-to=type=registry,ref=${CACHE},mode=max,ignore-error=true"
