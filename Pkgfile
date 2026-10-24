@@ -57,9 +57,9 @@ vars:
 
   # Fork-only: a commit of github.com/danielclasen/mxlfs, built against this
   # kernel for testing; there is no release to track yet.
-  mxlfs_ref: b7bc65b0cf53aedfe08087b5d7e62d44eedff20d
-  mxlfs_sha256: 394cd97e870d3c01a2154ddc9a4519854d81ab6fad1b473d1723025ced862e56
-  mxlfs_sha512: 5b474e9eb162e5c7d5cd4c09d1b1fb1c8a2ebadda2bce575ec90029a2cc8d443e8e7df0125793061ba140a87410b1e7485a405b0a51c7c028d9e0bb1afdfb38d
+  mxlfs_ref: 10cca30f7eb419833c0979e26bdacd6304d711f1
+  mxlfs_sha256: 969476fa194ab2310091a3767096fb7241fee3f956dfbe64712a3d67b7c1c1c6
+  mxlfs_sha512: beec3fa33b32204fa517c18e948d1c15af0a0b53589baa1ca9fb1cc6a1b49444723c8bf387e8c896e7ebf95c7a7817254624eed0f45f4120c50e559a84e68935
 
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 261.2
