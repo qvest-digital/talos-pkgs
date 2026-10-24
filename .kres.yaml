@@ -90,6 +90,7 @@ spec:
     - hailort-v4-pkg
     - hailort-v5-pkg
     - mellanox-mstflint-pkg
+    - mxlfs-pkg
     - nvidia-open-gpu-kernel-modules-lts-pkg
     - nvidia-open-gpu-kernel-modules-production-pkg
     - px-fuse-pkg

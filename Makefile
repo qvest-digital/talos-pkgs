@@ -139,6 +139,7 @@ TARGETS += gasket-driver-pkg
 TARGETS += hailort-v4-pkg
 TARGETS += hailort-v5-pkg
 TARGETS += mellanox-mstflint-pkg
+TARGETS += mxlfs-pkg
 TARGETS += nvidia-open-gpu-kernel-modules-lts-pkg
 TARGETS += nvidia-open-gpu-kernel-modules-production-pkg
 TARGETS += px-fuse-pkg

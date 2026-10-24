@@ -55,6 +55,12 @@ vars:
   efa_sha256: 8afc125de332621b38ed0887c99966b9a62bf07851ac81056ba7e4e6d2e7bc4a
   efa_sha512: c79462d66008151539b6173dbbeeb89e058bcf0592fc7ecb057c7aa167ee820120f378cbb8d907c72601f6de1bee6309c993e316c19f41bad693889a9ff61155
 
+  # Fork-only: a commit of github.com/danielclasen/mxlfs, built against this
+  # kernel for testing; there is no release to track yet.
+  mxlfs_ref: b7bc65b0cf53aedfe08087b5d7e62d44eedff20d
+  mxlfs_sha256: 394cd97e870d3c01a2154ddc9a4519854d81ab6fad1b473d1723025ced862e56
+  mxlfs_sha512: 5b474e9eb162e5c7d5cd4c09d1b1fb1c8a2ebadda2bce575ec90029a2cc8d443e8e7df0125793061ba140a87410b1e7485a405b0a51c7c028d9e0bb1afdfb38d
+
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 262
   systemd_sha256: 6aa77506c0644aa67f940a48e3d3a7368601f787e4f249139516d353f107bcab
