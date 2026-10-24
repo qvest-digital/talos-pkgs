@@ -55,11 +55,12 @@ vars:
   efa_sha256: 8afc125de332621b38ed0887c99966b9a62bf07851ac81056ba7e4e6d2e7bc4a
   efa_sha512: c79462d66008151539b6173dbbeeb89e058bcf0592fc7ecb057c7aa167ee820120f378cbb8d907c72601f6de1bee6309c993e316c19f41bad693889a9ff61155
 
-  # Fork-only: a commit of github.com/danielclasen/mxlfs, built against this
-  # kernel for testing; there is no release to track yet.
-  mxlfs_ref: 10cca30f7eb419833c0979e26bdacd6304d711f1
-  mxlfs_sha256: 969476fa194ab2310091a3767096fb7241fee3f956dfbe64712a3d67b7c1c1c6
-  mxlfs_sha512: beec3fa33b32204fa517c18e948d1c15af0a0b53589baa1ca9fb1cc6a1b49444723c8bf387e8c896e7ebf95c7a7817254624eed0f45f4120c50e559a84e68935
+  # Fork-only: a release of github.com/danielclasen/mxlfs, built against this
+  # kernel. The checksums are the ones the release publishes beside its
+  # source tarball.
+  mxlfs_version: 0.1.0-rc.1
+  mxlfs_sha256: 358c927d6c41e5b30402502d64a39f6bb0eb168d79990a91535a3463444dd432
+  mxlfs_sha512: 965639669fdd1984f33ed04dfac6ede99180287bd4ebb2868ea80bf4f491fb6e232f9eca7f395a8c518786482cb6bb4bbfb8d103dccf2113f7e59d8fc7321ac6
 
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 262
