@@ -12,7 +12,7 @@ name: fork-mxlfs-pkg
 on:
   push:
     branches:
-      - feat/mxlfs-pkg
+      - feat/mxlfs-next
     paths:
       - mxlfs-pkg/**
       - Pkgfile
@@ -58,10 +58,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # TAG is the pkgs revision Talos v1.13.6 pins, not what git describe
-      # yields for this branch. The extension that consumes this package
-      # resolves it, the Talos base and the kernel through one variable, so
-      # the tag has to be the one siderolabs publishes the rest under.
+      # TAG is the pkgs revision Talos v1.15.0-alpha.1 pins, not what git
+      # describe yields for this branch. The extension that consumes this
+      # package resolves it, the Talos base and the kernel through one
+      # variable, so the tag has to be the one siderolabs publishes the rest
+      # under.
       #
       # PLATFORM is amd64 only, as for efa-pkg: the EFA instance types the
       # module is tested on are x86.
@@ -73,8 +74,8 @@ jobs:
       # kernel, so the key signs only these modules.
       - name: build and push mxlfs-pkg
         env:
-          PKGS_TAG: v1.13.0-43-gd8c80cc
-          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.13.0-43-gd8c80cc
+          PKGS_TAG: v1.15.0-alpha.0-52-g305b1b6
+          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.15.0-alpha.0-52-g305b1b6
         run: |
           make mxlfs-pkg PUSH=true PLATFORM=linux/amd64 \
             USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}" \
