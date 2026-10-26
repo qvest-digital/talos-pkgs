@@ -13,7 +13,7 @@ on:
   push:
     branches:
       - main
-      - feat/efa-pkg-v1.13
+      - feat/mxlfs-v1.14.4
     paths:
       - efa-pkg/**
       - Pkgfile
@@ -59,7 +59,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # TAG is the pkgs revision Talos v1.13.6 pins, not what git describe
+      # TAG is the pkgs revision Talos v1.14.4 pins, not what git describe
       # yields for this branch. The extension that consumes this package
       # resolves it, the Talos base and the kernel through one variable, so
       # the tag has to be the one siderolabs publishes the rest under.
@@ -75,8 +75,8 @@ jobs:
       # ships that kernel, so the key signs only these modules.
       - name: build and push efa-pkg
         env:
-          PKGS_TAG: v1.13.0-43-gd8c80cc
-          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.13.0-43-gd8c80cc
+          PKGS_TAG: v1.14.0-44-g2ec10eb
+          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.14.0-44-g2ec10eb
         run: |
           make efa-pkg PUSH=true PLATFORM=linux/amd64 \
             USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}" \
