@@ -1,0 +1,36 @@
+From de9522a29fb48e435c3c8b606e21c74146c53421 Mon Sep 17 00:00:00 2001
+From: Daniel Clasen <d.clasen@qvest-digital.com>
+Date: Mon, 2 Nov 2026 00:18:24 +0100
+Subject: [PATCH 3/4] ice: do not disable a VF Tx queue before reconfiguring it
+
+Ported from Media Transport Library's "ice: support VF runtime
+rate-limit queue reconfiguration" by Dawid Wesierski
+(patches/ice_drv/2.6.7/0001, written against Intel's out-of-tree ice).
+The MTL patch removes the queue disable step during Tx queue
+reconfiguration so that reconfiguring a queue does not tear down
+queues that are actively pacing media traffic. Here the step is in
+ice_vc_cfg_qs_msg().
+
+Signed-off-by: Daniel Clasen <d.clasen@qvest-digital.com>
+---
+ drivers/net/ethernet/intel/ice/virt/queues.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/ice/virt/queues.c b/drivers/net/ethernet/intel/ice/virt/queues.c
+index b1a5c65ed..251d1e7fa 100644
+--- a/drivers/net/ethernet/intel/ice/virt/queues.c
++++ b/drivers/net/ethernet/intel/ice/virt/queues.c
+@@ -830,10 +830,6 @@ int ice_vc_cfg_qs_msg(struct ice_vf *vf, u8 *msg)
+ 			vsi->tx_rings[q_idx]->dma = qpi->txq.dma_ring_addr;
+ 			vsi->tx_rings[q_idx]->count = qpi->txq.ring_len;
+ 
+-			/* Disable any existing queue first */
+-			if (ice_vf_vsi_dis_single_txq(vf, vsi, q_idx))
+-				goto error_param;
+-
+ 			/* Configure a queue with the requested settings */
+ 			if (ice_vsi_cfg_single_txq(vsi, vsi->tx_rings, q_idx)) {
+ 				dev_warn(ice_pf_to_dev(pf), "VF-%d failed to configure TX queue %d\n",
+-- 
+2.55.0
+

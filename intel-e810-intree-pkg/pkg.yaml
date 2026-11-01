@@ -1,0 +1,89 @@
+name: intel-e810-intree-pkg
+variant: scratch
+shell: /bin/bash
+dependencies:
+  - stage: base
+  - stage: kernel-build
+  - image: "{{ .LLVM_IMAGE }}:{{ .TOOLS_REV }}"
+steps:
+  - env:
+      ARCH: {{ if eq .ARCH "aarch64"}}arm64{{ else if eq .ARCH "x86_64" }}x86_64{{ else }}unsupported{{ end }}
+      LLVM: 1
+    prepare:
+      # The kernel's own ice, with Media Transport Library's TX scheduler
+      # burst size patch, the parts of its VF runtime rate-limit patch the
+      # kernel does not already carry (patches/ice_drv/2.6.7 at commit
+      # bb37c66178d48736bf3764d2c9e6366263b3e97b of
+      # github.com/OpenVisualCloud/Media-Transport-Library), and a handler
+      # for VIRTCHNL_OP_CONFIG_QUEUE_TC_MAP taken from Intel's out-of-tree
+      # ice, which DPDK's iavf needs to commit a queue rate limit.
+      #
+      # The patches are applied to /src, the copy of the kernel tree this
+      # build owns, because one of them adds the message to
+      # include/linux/avf/virtchnl.h. Nothing else is rebuilt against it.
+      - |
+        cd /src
+        for p in /pkg/patches/*.patch; do
+          patch -p1 < "${p}"
+        done
+      - |
+        cp -a /src/drivers/net/ethernet/intel/ice ice
+        cp -a /src/drivers/infiniband/hw/irdma irdma
+
+        make -C /src M=$(pwd)/ice clean
+        make -C /src M=$(pwd)/irdma clean
+    build:
+      # irdma is rebuilt against this ice's Module.symvers rather than the
+      # kernel's: its imports from ice then carry this ice's symbol CRCs,
+      # and a CRC that a patched structure changed cannot fail at load.
+      # modpost reads KBUILD_EXTRA_SYMBOLS after the kernel's
+      # Module.symvers, and the later export of a name wins.
+      - |
+        make -C /src M=$(pwd)/ice -j $(nproc) modules
+        make -C /src M=$(pwd)/irdma KBUILD_EXTRA_SYMBOLS=$(pwd)/ice/Module.symvers -j $(nproc) modules
+      - |
+        # Every symbol irdma imports from ice must carry the CRC this ice
+        # exports it with.
+        imports=$(grep -oE '\{ 0x[0-9a-f]+, "[A-Za-z0-9_]+" \}' irdma/irdma.mod.c | sed -E 's/\{ (0x[0-9a-f]+), "([A-Za-z0-9_]+)" \}/\2 \1/' | sort)
+        exports=$(awk '$3 ~ /(^|\/)ice$/ {print $2, $1}' ice/Module.symvers | sort)
+        [ -n "${exports}" ]
+        n=0
+        while read -r sym crc; do
+          imp=$(printf '%s\n' "${imports}" | awk -v s="${sym}" '$1 == s {print $2}')
+          [ -z "${imp}" ] && continue
+          [ "$((imp))" = "$((crc))" ] || { echo "irdma imports ${sym} ${imp}, ice exports ${crc}"; exit 1; }
+          n=$((n + 1))
+        done <<< "${exports}"
+        [ "${n}" -gt 0 ] || { echo "irdma imports no symbol from ice"; exit 1; }
+        echo "irdma: ${n} imports from ice match its exports"
+    install:
+      - |
+        mkdir -p /rootfs/usr/lib/modules/$(cat /src/include/config/kernel.release)
+
+        make -C /src M=$(pwd)/ice modules_install INSTALL_MOD_PATH=/rootfs/usr INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1
+        make -C /src M=$(pwd)/irdma modules_install INSTALL_MOD_PATH=/rootfs/usr INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1
+    test:
+      # Both modules must be in extras/, signed, and carry the vermagic of
+      # the kernel they were built against; ice must be the patched build.
+      - |
+        krel=$(cat /src/include/config/kernel.release)
+        extras=/rootfs/usr/lib/modules/${krel}/extras
+
+        for ko in ice irdma; do
+          [ -f "${extras}/${ko}.ko" ] || { echo "missing: ${extras}/${ko}.ko"; exit 1; }
+        done
+
+        for ko in $(find /rootfs/usr/lib/modules -name '*.ko'); do
+          tail -c 28 "${ko}" | grep -qF '~Module signature appended~' || { echo "unsigned: ${ko}"; exit 1; }
+
+          vermagic=$(tr '\0' '\n' < "${ko}" | sed -n 's/^vermagic=//p')
+          [ "${vermagic%% *}" = "${krel}" ] || { echo "${ko}: vermagic '${vermagic}', kernel ${krel}"; exit 1; }
+        done
+
+        grep -qF 'BW rollback failed; HW inconsistent until VF reset' "${extras}/ice.ko"
+        grep -qF 'requesting more than supported number of TCs' "${extras}/ice.ko"
+      - |
+        fhs-validator /rootfs
+finalize:
+  - from: /rootfs
+    to: /
