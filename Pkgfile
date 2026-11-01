@@ -56,6 +56,13 @@ vars:
   mxlfs_sha256: 6aac264cf6a433699c89b383a1444a5c29d5349df33ed00cb86e4ad963606247
   mxlfs_sha512: 644ee207b5f374102ab256459b350a51633d16632dcdaa05de67134d856729e0e44bbbe729c787e5c5c018dd81fccff97a6ce34b9fb5d1544ca891a8214750dc
 
+  # Fork-only: Intel's out-of-tree E800 driver. Not tracked by renovate: the
+  # version is the one the vendored patches in intel-e810-oot-pkg/patches
+  # are written against.
+  ice_oot_version: 2.6.7
+  ice_oot_sha256: 89eaffee6acabedbaa45ba990d87371ae4178f194302bd830f8dd6be88a927ae
+  ice_oot_sha512: 7df4665c84f9722ece8173f1e725d57d3750aae4fa716194919c223c5265e2b31041e9bd17b6c7dc5ff874df9a88ffecf1f0e2fa87860a5964f4db02c1ae5183
+
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 259.5
   systemd_sha256: 80ed55a8a69c4bd1fb12a36659303372b37baf9ee224ef4f032db4b748be0f76

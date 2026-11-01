@@ -113,6 +113,7 @@ TARGETS += efa-pkg
 TARGETS += ena-pkg
 TARGETS += gasket-driver-pkg
 TARGETS += hailort-pkg
+TARGETS += intel-e810-oot-pkg
 TARGETS += mellanox-mstflint-pkg
 TARGETS += mxlfs-pkg
 TARGETS += nvidia-open-gpu-kernel-modules-lts-pkg
