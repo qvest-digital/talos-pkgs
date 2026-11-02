@@ -26,6 +26,12 @@ steps:
       # missed VIRTCHNL_OP_DISABLE_QUEUES from leaking a Tx scheduler node
       # on every reconfiguration until the PF has no room left to place one.
       #
+      # 0004-0009 backport the v7.4-rc1 series that sizes the VSI ring stats
+      # arrays from the final queue count (3fca849c9653..f1c3b87896e6). In
+      # 6.18 a VF that requests more queues than it was created with leaves
+      # its arrays short: the reset writes past them, and freeing the VF
+      # later passes neighbouring slab memory to kfree_rcu().
+      #
       # The patches are applied to /src, the copy of the kernel tree this
       # build owns, because one of them adds the message to
       # include/linux/avf/virtchnl.h. Nothing else is rebuilt against it.
