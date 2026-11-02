@@ -18,6 +18,14 @@ steps:
       # for VIRTCHNL_OP_CONFIG_QUEUE_TC_MAP taken from Intel's out-of-tree
       # ice, which DPDK's iavf needs to commit a queue rate limit.
       #
+      # MTL's rate-limit patch also removes the Tx queue disable before a VF
+      # queue is reconfigured, so that reconfiguring one queue does not stop
+      # one that is pacing. That part is not carried: the kernel's disable
+      # in ice_vc_cfg_qs_msg() is commit 6096dae926a2 ("ice: clear stale Tx
+      # queue settings before configuring"), which keeps a VF whose iavf
+      # missed VIRTCHNL_OP_DISABLE_QUEUES from leaking a Tx scheduler node
+      # on every reconfiguration until the PF has no room left to place one.
+      #
       # The patches are applied to /src, the copy of the kernel tree this
       # build owns, because one of them adds the message to
       # include/linux/avf/virtchnl.h. Nothing else is rebuilt against it.

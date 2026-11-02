@@ -1,7 +1,7 @@
-From 75d4d38a5c6d69cd97a8f3830184fbbb56a21101 Mon Sep 17 00:00:00 2001
+From c9927e8af3da155a2fa73149e3f26f721c111cd9 Mon Sep 17 00:00:00 2001
 From: Daniel Clasen <d.clasen@qvest-digital.com>
 Date: Mon, 2 Nov 2026 00:20:25 +0100
-Subject: [PATCH 4/4] ice: handle VIRTCHNL_OP_CONFIG_QUEUE_TC_MAP from VFs
+Subject: [PATCH 3/3] ice: handle VIRTCHNL_OP_CONFIG_QUEUE_TC_MAP from VFs
 
 DPDK's iavf traffic manager sends VIRTCHNL_OP_CONFIG_QUEUE_TC_MAP after
 VIRTCHNL_OP_CONFIG_QUEUE_BW when it commits a queue rate limit, and
@@ -19,17 +19,25 @@ cfg_q_tc_map; this sets it in both op tables.
 The response carries ICE_VF_VSI_ID, the VSI id the in-tree PF gives
 the VF in VIRTCHNL_OP_GET_VF_RESOURCES.
 
+Two things differ from the out-of-tree handler. A TC's priority bitmap
+ORs every user priority mapped to it, as ice_vc_get_qos_caps() does,
+where the original assigned and kept only the last one. And the VSI's
+tc_info and the rings' dcb_tc change only after ice_update_vsi()
+succeeds; the original changed them first and kept them when the
+update failed. An admin queue failure is reported as such rather than
+as out of memory.
+
 Signed-off-by: Daniel Clasen <d.clasen@qvest-digital.com>
 ---
  .../net/ethernet/intel/ice/virt/allowlist.c   |   4 +-
- drivers/net/ethernet/intel/ice/virt/queues.c  | 170 ++++++++++++++++++
+ drivers/net/ethernet/intel/ice/virt/queues.c  | 186 ++++++++++++++++++
  drivers/net/ethernet/intel/ice/virt/queues.h  |   1 +
  .../net/ethernet/intel/ice/virt/virtchnl.c    |   5 +
  include/linux/avf/virtchnl.h                  |  44 +++++
- 5 files changed, 222 insertions(+), 2 deletions(-)
+ 5 files changed, 238 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/net/ethernet/intel/ice/virt/allowlist.c b/drivers/net/ethernet/intel/ice/virt/allowlist.c
-index a07efec19..b743d73a7 100644
+index a07efec..b743d73 100644
 --- a/drivers/net/ethernet/intel/ice/virt/allowlist.c
 +++ b/drivers/net/ethernet/intel/ice/virt/allowlist.c
 @@ -91,8 +91,8 @@ static const u32 ptp_allowlist_opcodes[] = {
@@ -44,7 +52,7 @@ index a07efec19..b743d73a7 100644
  
  struct allowlist_opcode_info {
 diff --git a/drivers/net/ethernet/intel/ice/virt/queues.c b/drivers/net/ethernet/intel/ice/virt/queues.c
-index 251d1e7fa..684f0baba 100644
+index b1a5c65..0800e98 100644
 --- a/drivers/net/ethernet/intel/ice/virt/queues.c
 +++ b/drivers/net/ethernet/intel/ice/virt/queues.c
 @@ -7,6 +7,7 @@
@@ -55,7 +63,7 @@ index 251d1e7fa..684f0baba 100644
  
  /**
   * ice_vc_get_max_frame_size - get max frame size allowed for VF
-@@ -683,6 +684,175 @@ int ice_vc_cfg_q_bw(struct ice_vf *vf, u8 *msg)
+@@ -683,6 +684,191 @@ err:
  				    v_ret, NULL, 0);
  }
  
@@ -177,20 +185,27 @@ index 251d1e7fa..684f0baba 100644
 +	tc_map->num_tc = qtc->num_tc;
 +	tc_map->num_queue_pairs = qtc->num_queue_pairs;
 +
-+	/* Get the corresponding user priority bitmap for each TC */
++	/* Get the corresponding user priority bitmap for each TC. A TC
++	 * collects every user priority mapped to it, as
++	 * ice_vc_get_qos_caps() reports them; Intel's out-of-tree driver
++	 * assigns rather than ORs, which leaves only the last priority.
++	 */
 +	for (i = 0; i < ICE_MAX_USER_PRIORITY; i++) {
 +		int uptc =
 +		    hw->port_info->qos_cfg.local_dcbx_cfg.etscfg.prio_table[i];
 +
-+		prio_bitmap[uptc] = BIT(i);
++		if (uptc >= ICE_MAX_TRAFFIC_CLASS)
++			continue;
++		prio_bitmap[uptc] |= BIT(i);
 +	}
-+	/* Count queues number per TC, Rx and Tx queues are identical */
-+	for (i = 0; i < qtc->num_tc; i++) {
-+		vsi->tc_cfg.tc_info[i].qoffset = offset;
-+		vsi->tc_cfg.tc_info[i].qcount_tx = qtc->tc[i].req.queue_count;
-+		vsi->tc_cfg.tc_info[i].qcount_rx = qtc->tc[i].req.queue_count;
-+		vsi->tc_cfg.tc_info[i].netdev_tc = netdev_tc++;
 +
++	/* Build the queue mapping into the VSI context only. Intel's
++	 * out-of-tree driver writes tc_info and the rings' dcb_tc first and
++	 * keeps them when the VSI update then fails; here the VSI's state is
++	 * changed only once the hardware has taken the mapping, so a failed
++	 * update leaves the previous mapping in place on both sides.
++	 */
++	for (i = 0; i < qtc->num_tc; i++) {
 +		pow = (u16)order_base_2(qtc->tc[i].req.queue_count);
 +		qmap = FIELD_PREP(ICE_AQ_VSI_TC_Q_OFFSET_M, offset) |
 +		FIELD_PREP(ICE_AQ_VSI_TC_Q_NUM_M, pow);
@@ -202,8 +217,6 @@ index 251d1e7fa..684f0baba 100644
 +		tc_map->tc[i].resp.valid_prio_bitmap = prio_bitmap[i];
 +	}
 +
-+	ice_vsi_cfg_dcb_rings(vsi);
-+
 +	/* Update Rx queue mapping */
 +	ctx->info.mapping_flags = vsi->info.mapping_flags;
 +	memcpy(&ctx->info.q_mapping, &vsi->info.q_mapping,
@@ -212,12 +225,23 @@ index 251d1e7fa..684f0baba 100644
 +		cpu_to_le16(ICE_AQ_VSI_PROP_RXQ_MAP_VALID);
 +
 +	if (ice_update_vsi(hw, vsi->idx, ctx, NULL)) {
-+		dev_err(ice_pf_to_dev(pf), "Update VSI failed\n");
-+		v_ret = VIRTCHNL_STATUS_ERR_NO_MEMORY;
-+	} else {
-+		memcpy(&vsi->info.tc_mapping, ctx->info.tc_mapping,
-+		       sizeof(vsi->info.tc_mapping));
++		dev_err(ice_pf_to_dev(pf), "VF-%d update VSI for queue TC mapping failed\n",
++			vf->vf_id);
++		v_ret = VIRTCHNL_STATUS_ERR_ADMIN_QUEUE_ERROR;
++		goto err;
 +	}
++
++	memcpy(&vsi->info.tc_mapping, ctx->info.tc_mapping,
++	       sizeof(vsi->info.tc_mapping));
++	offset = 0;
++	for (i = 0; i < qtc->num_tc; i++) {
++		vsi->tc_cfg.tc_info[i].qoffset = offset;
++		vsi->tc_cfg.tc_info[i].qcount_tx = qtc->tc[i].req.queue_count;
++		vsi->tc_cfg.tc_info[i].qcount_rx = qtc->tc[i].req.queue_count;
++		vsi->tc_cfg.tc_info[i].netdev_tc = netdev_tc++;
++		offset += qtc->tc[i].req.queue_count;
++	}
++	ice_vsi_cfg_dcb_rings(vsi);
 +
 +err:
 +	/* send the response to the VF */
@@ -232,7 +256,7 @@ index 251d1e7fa..684f0baba 100644
   * ice_vc_cfg_q_quanta - Configure per queue quanta
   * @vf: pointer to the VF info
 diff --git a/drivers/net/ethernet/intel/ice/virt/queues.h b/drivers/net/ethernet/intel/ice/virt/queues.h
-index c4a792cec..97b665c47 100644
+index c4a792c..97b665c 100644
 --- a/drivers/net/ethernet/intel/ice/virt/queues.h
 +++ b/drivers/net/ethernet/intel/ice/virt/queues.h
 @@ -12,6 +12,7 @@ u16 ice_vc_get_max_frame_size(struct ice_vf *vf);
@@ -244,7 +268,7 @@ index c4a792cec..97b665c47 100644
  int ice_vc_cfg_q_quanta(struct ice_vf *vf, u8 *msg);
  int ice_vc_cfg_qs_msg(struct ice_vf *vf, u8 *msg);
 diff --git a/drivers/net/ethernet/intel/ice/virt/virtchnl.c b/drivers/net/ethernet/intel/ice/virt/virtchnl.c
-index f3f921134..9278a283f 100644
+index f3f9211..9278a28 100644
 --- a/drivers/net/ethernet/intel/ice/virt/virtchnl.c
 +++ b/drivers/net/ethernet/intel/ice/virt/virtchnl.c
 @@ -2529,6 +2529,7 @@ static const struct ice_virtchnl_ops ice_virtchnl_dflt_ops = {
@@ -263,7 +287,7 @@ index f3f921134..9278a283f 100644
  	.cfg_q_bw = ice_vc_cfg_q_bw,
  	.cfg_q_quanta = ice_vc_cfg_q_quanta,
  	.get_ptp_cap = ice_vc_get_ptp_cap,
-@@ -2901,6 +2903,9 @@ void ice_vc_process_vf_msg(struct ice_pf *pf, struct ice_rq_event_info *event,
+@@ -2901,6 +2903,9 @@ error_handler:
  	case VIRTCHNL_OP_GET_QOS_CAPS:
  		err = ops->get_qos_caps(vf);
  		break;
@@ -274,7 +298,7 @@ index f3f921134..9278a283f 100644
  		err = ops->cfg_q_bw(vf, msg);
  		break;
 diff --git a/include/linux/avf/virtchnl.h b/include/linux/avf/virtchnl.h
-index 5be1881ab..96875388d 100644
+index 5be1881..9687538 100644
 --- a/include/linux/avf/virtchnl.h
 +++ b/include/linux/avf/virtchnl.h
 @@ -159,6 +159,7 @@ enum virtchnl_ops {
