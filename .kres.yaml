@@ -69,6 +69,7 @@ spec:
     - ena-pkg
     - gasket-driver-pkg
     - hailort-pkg
+    - intel-e810-intree-pkg
     - mellanox-mstflint-pkg
     - mxlfs-pkg
     - nvidia-open-gpu-kernel-modules-lts-pkg
