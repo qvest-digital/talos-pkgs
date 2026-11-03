@@ -1,0 +1,48 @@
+From e33d1e981da380f4969e2b72bd1ce5d5383a050b Mon Sep 17 00:00:00 2001
+From: Daniel Clasen <d.clasen@qvest-digital.com>
+Date: Tue, 3 Nov 2026 08:53:36 +0100
+Subject: [PATCH] ice: take the UP to TC map from dcbnl ETS in DSCP mode
+
+ice_dcbnl_setets() copies prio_tc into the desired configuration only
+in VLAN QoS mode. In L3 DSCP mode the map is written once, 1:1 up to
+the port's maximum TC count, when the first DSCP application entry
+switches the port to DSCP mode, and an ETS request's prio_tc is
+dropped without an error, while its bandwidth and TSA tables are
+applied.
+
+Copy prio_tc in both modes. The driver's map decides the number of
+TCs the PF VSI is configured with (ice_dcb_get_num_tc()), the netdev
+priority to TC map and the num_tc irdma is given. The LLDP MIB sent
+to firmware in DSCP mode carries the DSCP to UP table, TC bandwidth,
+TSA, the maximum TC count and PFC, not a UP to TC map, so firmware
+configuration is the same for every map.
+
+Entering DSCP mode still writes the 1:1 map, so nothing changes until
+an ETS request is made. A request firmware refuses leaves the previous
+configuration in place: ice_pf_dcb_cfg() restores it when
+ice_set_dcb_cfg() fails.
+---
+ drivers/net/ethernet/intel/ice/ice_dcb_nl.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/ice/ice_dcb_nl.c b/drivers/net/ethernet/intel/ice/ice_dcb_nl.c
+index a10c1c8..f39cae8 100644
+--- a/drivers/net/ethernet/intel/ice/ice_dcb_nl.c
++++ b/drivers/net/ethernet/intel/ice/ice_dcb_nl.c
+@@ -85,11 +85,8 @@ static int ice_dcbnl_setets(struct net_device *netdev, struct ieee_ets *ets)
+ 		new_cfg->etscfg.tcbwtable[i] = ets->tc_tx_bw[i];
+ 		bwcfg += ets->tc_tx_bw[i];
+ 		new_cfg->etscfg.tsatable[i] = ets->tc_tsa[i];
+-		if (new_cfg->pfc_mode == ICE_QOS_MODE_VLAN) {
+-			/* in DSCP mode up->tc mapping cannot change */
+-			new_cfg->etscfg.prio_table[i] = ets->prio_tc[i];
+-			new_cfg->etsrec.prio_table[i] = ets->reco_prio_tc[i];
+-		}
++		new_cfg->etscfg.prio_table[i] = ets->prio_tc[i];
++		new_cfg->etsrec.prio_table[i] = ets->reco_prio_tc[i];
+ 		new_cfg->etsrec.tcbwtable[i] = ets->tc_reco_bw[i];
+ 		bwrec += ets->tc_reco_bw[i];
+ 		new_cfg->etsrec.tsatable[i] = ets->tc_reco_tsa[i];
+-- 
+2.55.0
+

@@ -32,6 +32,10 @@ steps:
       # its arrays short: the reset writes past them, and freeing the VF
       # later passes neighbouring slab memory to kfree_rcu().
       #
+      # 0010 lets a dcbnl ETS request set the UP to TC map in L3 DSCP mode,
+      # which in-tree ice fixes at 1:1 for the port's maximum TC count.
+      # Entering DSCP mode still writes 1:1.
+      #
       # The patches are applied to /src, the copy of the kernel tree this
       # build owns, because one of them adds the message to
       # include/linux/avf/virtchnl.h. Nothing else is rebuilt against it.
