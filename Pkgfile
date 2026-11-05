@@ -56,6 +56,21 @@ vars:
   mxlfs_sha256: 6aac264cf6a433699c89b383a1444a5c29d5349df33ed00cb86e4ad963606247
   mxlfs_sha512: 644ee207b5f374102ab256459b350a51633d16632dcdaa05de67134d856729e0e44bbbe729c787e5c5c018dd81fccff97a6ce34b9fb5d1544ca891a8214750dc
 
+  # Fork-only: Intel's out-of-tree E800 driver. Not tracked by renovate: the
+  # version is the one the vendored patches in intel-e810-oot-pkg/patches
+  # are written against.
+  ice_oot_version: 2.7.6
+  ice_oot_sha256: dfb308deb11cd8e58ef6afc119192ad536b0d2dc45cbb257e66ba823c50f1283
+  ice_oot_sha512: c81354d53331ccf48a1ecf553e95fffefa52e373849c14015188d83fec558aa189dd47843da976d8cd9aa7ee210c194db82fd5e1754e37b30b4a0791c9330a5a
+
+  # Fork-only: Intel's out-of-tree irdma, the release paired with the ice
+  # above. Intel publishes it only behind a download page that refuses
+  # automated clients, so the unmodified tarball is mirrored to a
+  # pre-release of this fork.
+  irdma_oot_version: 2.7.74
+  irdma_oot_sha256: c668f312f358a1df19dcb548119bf5863301a7ca0f5a101e660fe0b6630c2bc8
+  irdma_oot_sha512: 6412464a82b4cac1da2e6ae94f8d326f72c010d0f8e99384e2b128465ed25d4082a8f21e8ac9be576dfb305493b572fe86691de85d8dbc10ce93e2fae31cdeb8
+
   # renovate: datasource=github-releases extractVersion=^v(?<version>.*)$ depName=systemd/systemd
   systemd_version: 259.5
   systemd_sha256: 80ed55a8a69c4bd1fb12a36659303372b37baf9ee224ef4f032db4b748be0f76
