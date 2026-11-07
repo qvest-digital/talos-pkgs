@@ -19,11 +19,6 @@ on:
       - Pkgfile
       - .github/workflows/fork-efa-pkg.yml
   workflow_dispatch:
-    inputs:
-      test:
-        description: Read the -test kernel cache ref and push the image tagged -citest.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -54,7 +49,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: |
-          .github/fork-pkg-changed.sh 'efa_' \
+          .github/fork-pkg-changed.sh 'efa_(version|sha256|sha512)' \
             efa-pkg .github/workflows/fork-efa-pkg.yml
 
       # The kernel build writes tens of gigabytes. A hosted runner keeps
@@ -103,13 +98,14 @@ jobs:
       # build generated; nothing the fork builds ships that kernel, so the
       # key signs only the fork's modules.
       #
-      # A dispatch with test set reads the -test kernel ref and pushes the
-      # image tagged <PKGS_TAG>-citest instead.
+      # Only main and feat/efa-pkg-v1.13 reads the production kernel ref and pushes the
+      # production tag. Any other branch reads the -test kernel ref and
+      # pushes <PKGS_TAG>-citest.
       - name: build and push efa-pkg
         if: steps.changes.outputs.build == 'true'
         env:
           PKGS_TAG: v1.13.0-43-gd8c80cc
-          SUFFIX: ${{ inputs.test && '-test' || '' }}
+          SUFFIX: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/feat/efa-pkg-v1.13' && '-test' || '' }}
         run: |
           KERNEL_CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
           if ! docker buildx imagetools inspect --raw "${KERNEL_CACHE}" >/dev/null; then

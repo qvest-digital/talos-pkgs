@@ -18,11 +18,6 @@ on:
       - Pkgfile
       - .github/workflows/fork-mxlfs-pkg.yml
   workflow_dispatch:
-    inputs:
-      test:
-        description: Read the -test kernel cache ref and push the image tagged -citest.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -53,7 +48,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: |
-          .github/fork-pkg-changed.sh 'mxlfs_' \
+          .github/fork-pkg-changed.sh 'mxlfs_(version|sha256|sha512)' \
             mxlfs-pkg .github/workflows/fork-mxlfs-pkg.yml
 
       # The kernel build writes tens of gigabytes. A hosted runner keeps
@@ -101,13 +96,14 @@ jobs:
       # build generated; nothing the fork builds ships that kernel, so the
       # key signs only the fork's modules.
       #
-      # A dispatch with test set reads the -test kernel ref and pushes the
-      # image tagged <PKGS_TAG>-citest instead.
+      # Only feat/mxlfs-pkg reads the production kernel ref and pushes the
+      # production tag. Any other branch reads the -test kernel ref and
+      # pushes <PKGS_TAG>-citest.
       - name: build and push mxlfs-pkg
         if: steps.changes.outputs.build == 'true'
         env:
           PKGS_TAG: v1.13.0-43-gd8c80cc
-          SUFFIX: ${{ inputs.test && '-test' || '' }}
+          SUFFIX: ${{ github.ref != 'refs/heads/feat/mxlfs-pkg' && '-test' || '' }}
         run: |
           KERNEL_CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
           if ! docker buildx imagetools inspect --raw "${KERNEL_CACHE}" >/dev/null; then
