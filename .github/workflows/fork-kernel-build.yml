@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - feat/mxlfs-pkg
+      - ci/kernel-tree
     paths:
       - base/**
       - kernel/**
