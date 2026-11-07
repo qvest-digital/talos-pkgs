@@ -5,7 +5,7 @@
 # Usage: fork-pkg-changed.sh VAR_REGEX PATH...
 #
 # Writes build=true to $GITHUB_OUTPUT when a push changed any PATH, or a
-# Pkgfile line defining a variable whose name starts with VAR_REGEX, and
+# Pkgfile line defining a variable whose whole name matches VAR_REGEX, and
 # build=false otherwise. Anything but a push, and a push whose previous
 # commit is unknown, builds.
 
@@ -34,7 +34,7 @@ if [ -n "$(git diff --name-only "${BEFORE}" "${GITHUB_SHA}" -- "$@")" ]; then
   exit 0
 fi
 
-if git diff -U0 "${BEFORE}" "${GITHUB_SHA}" -- Pkgfile | grep -qE "^[-+][[:space:]]*(${vars})"; then
+if git diff -U0 "${BEFORE}" "${GITHUB_SHA}" -- Pkgfile | grep -qE "^[-+][[:space:]]*(${vars}):"; then
   build true
   exit 0
 fi
