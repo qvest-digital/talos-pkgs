@@ -19,11 +19,6 @@ on:
       - .github/fork-pkg-changed.sh
       - .github/workflows/fork-kernel-build.yml
   workflow_dispatch:
-    inputs:
-      test:
-        description: Write the cache to the -test ref instead of the one the module workflows read.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -88,7 +83,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # PKGS_TAG is the pkgs revision Talos v1.13.6 pins, the same value the
-      # module workflows use, and names the cache ref they read.
+      # module workflows use, and names the cache ref they read. Only
+      # feat/mxlfs-pkg writes that ref; a run on any other branch writes
+      # the same name suffixed -test.
       #
       # target-kernel-build is the Makefile's target-% rule with
       # --target=kernel-build: it builds the stage into the build cache
@@ -103,7 +100,7 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         env:
           PKGS_TAG: v1.13.0-43-gd8c80cc
-          SUFFIX: ${{ inputs.test && '-test' || '' }}
+          SUFFIX: ${{ github.ref != 'refs/heads/feat/mxlfs-pkg' && '-test' || '' }}
         run: |
           CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
           echo "cache ref: ${CACHE}"
