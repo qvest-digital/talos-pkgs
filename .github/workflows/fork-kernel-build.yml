@@ -17,7 +17,6 @@ on:
       - base/**
       - kernel/**
       - Pkgfile
-      - .github/fork-pkg-changed.sh
       - .github/workflows/fork-kernel-build.yml
   workflow_dispatch:
 
@@ -52,7 +51,7 @@ jobs:
         run: |
           .github/fork-pkg-changed.sh \
             'linux_|kspp_|TOOLS_PREFIX|TOOLS_REV|LLVM_IMAGE' \
-            base kernel .github/fork-pkg-changed.sh .github/workflows/fork-kernel-build.yml
+            base kernel .github/workflows/fork-kernel-build.yml
 
       # The kernel build writes tens of gigabytes. A hosted runner keeps
       # docker on /, which has roughly 20 GB free, and /mnt is the large
