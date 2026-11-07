@@ -52,9 +52,9 @@ vars:
   # Fork-only: a release of github.com/danielclasen/mxlfs, built against this
   # kernel. The checksums are the ones the release publishes beside its
   # source tarball.
-  mxlfs_version: 0.1.0-rc.4
-  mxlfs_sha256: e9d42cefeeef7294f86852b74245cc59c17b2df3354baa318d94e5b44f55dd24
-  mxlfs_sha512: 16d122af5c94434a800755ff5a07cb086030a8129558968f362920ae0246d743015039023de2f05124b7df82d67a7c5a326965af1eb197e65bf0a779955702ac
+  mxlfs_version: 0.1.0-rc.5
+  mxlfs_sha256: af12346104a3f261ec9bb52f46068813be387e5d621f146d0cd499125e0b5baa
+  mxlfs_sha512: bdfad55f39d19409458efe20752e94aeb17d465b87638b7927ebc1ef196f288c0745ca7ec71b5334c9d6598f847492d028e0e04d5d0ff73f6a12c71a9702921f
 
   # Fork-only: Intel's out-of-tree E800 driver. Not tracked by renovate: the
   # version is the one the vendored patches in intel-e810-oot-pkg/patches
