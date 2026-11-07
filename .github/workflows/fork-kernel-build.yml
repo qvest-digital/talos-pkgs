@@ -20,6 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
   packages: write
 
@@ -49,7 +50,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           .github/fork-pkg-changed.sh \
-            'linux_|kspp_|TOOLS_PREFIX|TOOLS_REV|LLVM_IMAGE' \
+            'linux_(version|sha256|sha512)|kspp_(ref|sha256|sha512)|TOOLS_PREFIX|TOOLS_REV|LLVM_IMAGE' \
             base kernel .github/workflows/fork-kernel-build.yml
 
       # The kernel build writes tens of gigabytes. A hosted runner keeps
@@ -105,3 +106,17 @@ jobs:
           echo "cache ref: ${CACHE}"
           make target-kernel-build PLATFORM=linux/amd64 \
             CI_ARGS="--cache-from=type=registry,ref=${CACHE} --cache-to=type=registry,ref=${CACHE},mode=max"
+
+      # The modules on this branch build against the cache just written.
+      # workflow_run would fire only for workflow files on the default
+      # branch, which carries none of the fork workflows, so this
+      # dispatches them; a dispatch made with GITHUB_TOKEN starts a run.
+      # fork-efa-pkg.yml is left out: it publishes from other branches.
+      - name: dispatch the module workflows
+        if: steps.changes.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in fork-mxlfs-pkg.yml fork-intel-e810-intree-pkg.yml fork-intel-e810-oot-pkg.yml; do
+            gh workflow run "${wf}" -R "${{ github.repository }}" --ref "${GITHUB_REF_NAME}"
+          done
