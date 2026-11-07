@@ -13,23 +13,37 @@ on:
   push:
     branches:
       - feat/mxlfs-pkg
+    # No Pkgfile: this package templates in no variables of its own.
     paths:
       - intel-e810-intree-pkg/**
-      - Pkgfile
       - .github/workflows/fork-intel-e810-intree-pkg.yml
   workflow_dispatch:
+    inputs:
+      test:
+        description: Read the -test kernel cache ref and push the image tagged -citest.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
+      # Full history: the Makefile takes SOURCE_DATE_EPOCH from the root
+      # commit, and bldr writes it into every stage's finalize step. In a
+      # shallow clone the root commit is HEAD, so the kernel stages would
+      # miss the cache on every commit.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       # The kernel build writes tens of gigabytes. A hosted runner keeps
@@ -66,17 +80,26 @@ jobs:
       # PLATFORM is amd64 only: the E810 hosts the module is tested on are
       # x86.
       #
-      # The kernel stage is most of an hour and the same for every build at
-      # one pkgs revision, so it is cached in the registry, shared with
-      # fork-efa-pkg.yml and fork-mxlfs-pkg.yml: after the first build at
-      # a revision, a module change rebuilds the module alone. The cache
-      # holds the signing key that kernel build generated; nothing the
-      # fork builds ships that kernel, so the key signs only these modules.
+      # The kernel-build stage the module depends on comes from the registry
+      # cache fork-kernel-build.yml writes once per pkgs revision, so only
+      # the module's own steps run. The run stops when that ref is missing
+      # rather than rebuild the kernel, and exports no cache: the module's
+      # own steps take seconds. The cache holds the signing key that kernel
+      # build generated; nothing the fork builds ships that kernel, so the
+      # key signs only the fork's modules.
+      #
+      # A dispatch with test set reads the -test kernel ref and pushes the
+      # image tagged <PKGS_TAG>-citest instead.
       - name: build and push intel-e810-intree-pkg
         env:
           PKGS_TAG: v1.13.0-43-gd8c80cc
-          CACHE: ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:v1.13.0-43-gd8c80cc
+          SUFFIX: ${{ inputs.test && '-test' || '' }}
         run: |
+          KERNEL_CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
+          if ! docker buildx imagetools inspect --raw "${KERNEL_CACHE}" >/dev/null; then
+            echo "::error::${KERNEL_CACHE} does not exist; run fork-kernel-build first"
+            exit 1
+          fi
           make intel-e810-intree-pkg PUSH=true PLATFORM=linux/amd64 \
-            USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}" \
-            CI_ARGS="--cache-from=type=registry,ref=${CACHE} --cache-to=type=registry,ref=${CACHE},mode=max,ignore-error=true"
+            USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}${SUFFIX:+-citest}" \
+            CI_ARGS="--cache-from=type=registry,ref=${KERNEL_CACHE}"
