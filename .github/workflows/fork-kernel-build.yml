@@ -92,6 +92,12 @@ jobs:
       # pull request branch built at the same revision is reused instead
       # of built again after the merge.
       #
+      # Every run also reads kernel-<PKGS_TAG>-prebuild, which
+      # fork-upstream-prebuild.yml on main writes from siderolabs/pkgs at
+      # the same revision once a Talos release pins it. The fork layer
+      # changes no kernel input, so a prebuilt revision is a cache hit. A
+      # missing ref is reported and skipped; it does not fail the build.
+      #
       # target-kernel-build is the Makefile's target-% rule with
       # --target=kernel-build: it builds the stage into the build cache
       # only, and --cache-to exports every intermediate step (mode=max).
@@ -110,6 +116,7 @@ jobs:
           CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
           echo "cache ref: ${CACHE}"
           CACHE_FROM="--cache-from=type=registry,ref=${CACHE}"
+          CACHE_FROM="${CACHE_FROM} --cache-from=type=registry,ref=${CACHE%:*}:kernel-${PKGS_TAG}-prebuild"
           if [ -z "${SUFFIX}" ]; then
             CACHE_FROM="${CACHE_FROM} --cache-from=type=registry,ref=${CACHE}-test"
           fi
