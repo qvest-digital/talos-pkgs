@@ -1,0 +1,121 @@
+name: intel-e810-oot-pkg
+variant: scratch
+shell: /bin/bash
+dependencies:
+  - stage: base
+  - stage: kernel-build
+  - image: "{{ .LLVM_IMAGE }}:{{ .TOOLS_REV }}"
+steps:
+  - sources:
+      - url: https://github.com/intel/ethernet-linux-ice/releases/download/v{{ .ice_oot_version }}/ice-{{ .ice_oot_version }}.tar.gz
+        destination: ice.tar.gz
+        sha256: "{{ .ice_oot_sha256 }}"
+        sha512: "{{ .ice_oot_sha512 }}"
+      - url: https://github.com/qvest-digital/talos-pkgs/releases/download/intel-irdma-{{ .irdma_oot_version }}/irdma-{{ .irdma_oot_version }}.tgz
+        destination: irdma.tgz
+        sha256: "{{ .irdma_oot_sha256 }}"
+        sha512: "{{ .irdma_oot_sha512 }}"
+    env:
+      ARCH: {{ if eq .ARCH "aarch64"}}arm64{{ else if eq .ARCH "x86_64" }}x86_64{{ else }}unsupported{{ end }}
+      LLVM: 1
+    prepare:
+      # The patches are Media Transport Library's patches/ice_drv/2.6.7, at
+      # commit bb37c66178d48736bf3764d2c9e6366263b3e97b of
+      # github.com/OpenVisualCloud/Media-Transport-Library, carried to this
+      # ice release. 2.7.6 already contains MTL's TX scheduler burst size,
+      # its MAP_QUEUE_VECTOR size fix and most of its VF runtime rate-limit
+      # change; what remains is the LARGE_NUM_QPAIRS patch unchanged, the
+      # rest of the rate-limit change, and the version rename, so the
+      # version string identifies a patched build.
+      - |
+        mkdir ice
+        tar xf ice.tar.gz -C ice --strip-components=1
+
+        cd ice
+        for p in /pkg/patches/*.patch; do
+          patch -p1 < "${p}"
+        done
+
+        grep -qF '"Kahawai_{{ .ice_oot_version }}"' src/ice_main.c
+
+        # The parts of MTL's patches this release already carries.
+        grep -qE '^#define ICE_SCHED_DFLT_BURST_SIZE\s+\(2 \* 1024\)' src/ice_type.h
+        grep -qF 'qs_bw_tmp = kmemdup(vf->qs_bw, len, GFP_KERNEL);' src/ice_virtchnl.c
+      - |
+        mkdir irdma
+        tar xf irdma.tgz -C irdma --strip-components=1
+    build:
+      # The driver's own Makefile runs kcompat-generator.sh against KSRC,
+      # which probes the kernel headers and decides the compat code paths,
+      # then calls the kernel build. CC is set for the Makefile's own
+      # preprocessor calls; LLVM=1 makes the kernel build use clang, as the
+      # kernel itself was built.
+      - |
+        make -C ice/src KSRC=/src CC=clang
+      # irdma's build.sh, without its install, distribution detection and
+      # OFED paths: generate the compat header against the kernel tree,
+      # then build with the headers build.sh force-includes. irdma binds to
+      # ice through the auxiliary bus and the IIDC ops table, not through
+      # ice's exported symbols, so it needs no Module.symvers from ice.
+      # build.sh adds W=1, the kernel's extra warnings, which the
+      # driver's -Werror then turns into errors under clang; it is left
+      # out.
+      - |
+        cd irdma
+        export INCLUDE_KCONF_HDR="-include /src/include/linux/kconfig.h"
+        export INCLUDE_AUTOCONF_HDR="-include /src/include/generated/autoconf.h"
+        export UTSRELEASE_HDR="-include /src/include/generated/utsrelease.h"
+
+        CONFFILE=/src/include/generated/autoconf.h OUT=$(pwd)/src/irdma/irdma_kcompat_gen.h KSRC=/src QUIET_COMPAT=1 \
+          bash src/irdma/kcompat-generator.sh
+
+        make -C /src M=$(pwd)/src/irdma "CFLAGS_MODULE=-DMODULE -DSLE_LOCALVERSION_CODE=0 -DOFED_VERSION_CODE=" modules
+    install:
+      # modules_install of the kernel, not of the driver: the driver's
+      # target also runs depmod and installs the DDP into /lib/firmware.
+      # The kernel's signs the module with the key of the kernel-build
+      # stage, as CONFIG_MODULE_SIG_ALL asks.
+      #
+      # The DDP goes to firmware/updates, which the kernel firmware loader
+      # searches before firmware/, so it takes precedence over the DDP that
+      # linux-firmware ships at the same name without replacing that file.
+      - |
+        mkdir -p /rootfs/usr/lib/modules/$(cat /src/include/config/kernel.release)
+
+        make -C /src M=$(pwd)/ice/src KSRC=/src CC=clang modules_install INSTALL_MOD_PATH=/rootfs/usr INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1
+        make -C /src M=$(pwd)/irdma/src/irdma modules_install INSTALL_MOD_PATH=/rootfs/usr INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1
+
+        ddp=$(echo ice/ddp/ice-*.pkg)
+        install -D -m 0644 "${ddp}" /rootfs/usr/lib/firmware/updates/intel/ice/ddp/$(basename "${ddp}")
+        ln -s $(basename "${ddp}") /rootfs/usr/lib/firmware/updates/intel/ice/ddp/ice.pkg
+        install -D -m 0644 ice/ddp/LICENSE /rootfs/usr/lib/firmware/updates/intel/ice/ddp/LICENSE
+    test:
+      # Every module must be signed and carry the vermagic of the kernel it
+      # was built against: a module from another pkgs revision does not
+      # load. ice must be the patched build. grep reads its whole input
+      # here: with pipefail, a grep -q that exits early fails the step on
+      # the writer's SIGPIPE.
+      - |
+        krel=$(cat /src/include/config/kernel.release)
+        modules=$(find /rootfs/usr/lib/modules -name '*.ko')
+        [ -n "${modules}" ]
+
+        for ko in ${modules}; do
+          tail -c 28 "${ko}" | grep -F '~Module signature appended~' >/dev/null || { echo "unsigned: ${ko}"; exit 1; }
+
+          vermagic=$(tr '\0' '\n' < "${ko}" | sed -n 's/^vermagic=//p')
+          [ "${vermagic%% *}" = "${krel}" ] || { echo "${ko}: vermagic '${vermagic}', kernel ${krel}"; exit 1; }
+        done
+
+        ice=/rootfs/usr/lib/modules/${krel}/extras/ice.ko
+        tr '\0' '\n' < "${ice}" | grep -x 'version=Kahawai_{{ .ice_oot_version }}' >/dev/null
+
+        irdma=/rootfs/usr/lib/modules/${krel}/extras/irdma.ko
+        tr '\0' '\n' < "${irdma}" | grep -x 'version={{ .irdma_oot_version }}' >/dev/null
+
+        [ -f /rootfs/usr/lib/firmware/updates/intel/ice/ddp/ice.pkg ]
+      - |
+        fhs-validator /rootfs
+finalize:
+  - from: /rootfs
+    to: /
