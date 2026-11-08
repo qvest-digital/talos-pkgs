@@ -14,8 +14,9 @@ name: fork-upstream-prebuild
 # itself, since the fork layer changes no kernel input, and exported with
 # mode=max to talos-pkgs-cache:kernel-<PKGS>-prebuild. A revision whose
 # kernel-<PKGS>, -test or -prebuild ref already exists is not built.
-# fork-kernel-build.yml on a branch reads the -prebuild ref as an extra
-# --cache-from and writes its own refs; this workflow writes no other ref.
+# This workflow writes no other ref. A branch's fork-kernel-build.yml
+# takes the stage from it only once it lists the -prebuild ref as an extra
+# --cache-from; that change is made on the branches separately.
 #
 # For every revision it also cherry-picks the fork layer of fork_branch,
 # the commits on it that no siderolabs/pkgs branch or tag contains, onto
@@ -26,6 +27,9 @@ name: fork-upstream-prebuild
 # branch. main is otherwise a mirror of siderolabs/pkgs main; with this
 # file on it, a sync from upstream is a merge, not a fast-forward. Not
 # part of any upstream contribution: kres does not generate it.
+#
+# GitHub disables scheduled workflows in a public repository after 60
+# days without repository activity; re-enable it from the Actions tab.
 
 on:
   schedule:
@@ -43,7 +47,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 # One run at a time. Branch builds write other cache refs, so they do not
 # share this group.
@@ -67,11 +70,15 @@ jobs:
           PRERELEASES: ${{ inputs.prereleases || false }}
         run: |
           set -euo pipefail
-          releases=$(gh api 'repos/siderolabs/talos/releases?per_page=100' \
+          releases=$(gh api --paginate 'repos/siderolabs/talos/releases?per_page=100' \
             --jq '.[] | select(.draft | not) | [.tag_name, .prerelease] | @tsv')
           # Newest first; the first tag of each minor is its latest patch.
           tags=$(awk '$2 == "false" {print $1}' <<<"${releases}" | sort -rV |
             awk -F. '!seen[$1 "." $2]++' | head -n 2)
+          if [ "$(grep -c . <<<"${tags}")" -ne 2 ]; then
+            echo "::error::expected the latest patch of 2 stable minors, got: ${tags}"
+            exit 1
+          fi
           newest=$(head -n 1 <<<"${tags}" | cut -d. -f1,2)
           if [ "${PRERELEASES}" = true ]; then
             pre=$(awk '$2 == "true" {print $1}' <<<"${releases}" | sort -rV | head -n 1)
@@ -96,6 +103,9 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -130,11 +140,18 @@ jobs:
           [[ "${PKGS}" =~ -g([0-9a-f]+)$ ]] && rev=${BASH_REMATCH[1]}
           git checkout -q --detach "${rev}"
           echo "pkgs ${PKGS} is $(git rev-parse HEAD)"
+          # Only "not found" means missing; any other registry error stops
+          # the job rather than start a two-hour build.
           for suffix in "" -test -prebuild; do
-            if docker buildx imagetools inspect --raw "${CACHE_REPO}:kernel-${PKGS}${suffix}" >/dev/null 2>&1; then
-              echo "found ${CACHE_REPO}:kernel-${PKGS}${suffix}"
+            ref="${CACHE_REPO}:kernel-${PKGS}${suffix}"
+            if err=$(docker buildx imagetools inspect --raw "${ref}" 2>&1 >/dev/null); then
+              echo "found ${ref}"
               echo "existing=kernel-${PKGS}${suffix}" >>"${GITHUB_OUTPUT}"
               exit 0
+            fi
+            if [[ "${err}" != *"${ref}: not found"* ]]; then
+              echo "::error::cannot inspect ${ref}: ${err}"
+              exit 1
             fi
           done
           echo "existing=" >>"${GITHUB_OUTPUT}"
