@@ -84,10 +84,14 @@ spec:
     #   kernel first, then packages in alphabetical order
     - kernel
     - drbd-pkg
+    - efa-pkg
     - ena-pkg
     - gasket-driver-pkg
     - hailort-pkg
+    - intel-e810-intree-pkg
+    - intel-e810-oot-pkg
     - mellanox-mstflint-pkg
+    - mxlfs-pkg
     - nvidia-open-gpu-kernel-modules-lts-pkg
     - nvidia-open-gpu-kernel-modules-production-pkg
     - px-fuse-pkg

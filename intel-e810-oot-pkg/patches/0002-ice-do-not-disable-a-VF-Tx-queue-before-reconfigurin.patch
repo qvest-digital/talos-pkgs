@@ -1,0 +1,38 @@
+From 78695f1d8d7f591e88d3138fca661353cdad4701 Mon Sep 17 00:00:00 2001
+From: Daniel Clasen <d.clasen@qvest-digital.com>
+Date: Mon, 2 Nov 2026 00:12:06 +0100
+Subject: [PATCH 2/3] ice: do not disable a VF Tx queue before reconfiguring it
+
+The part of Media Transport Library's patch "ice: support VF runtime
+rate-limit queue reconfiguration" by Dawid Wesierski
+(patches/ice_drv/2.6.7/0001) that ice 2.7.6 does not already contain.
+ice 2.7.6 applies the queue bandwidth in ice_vc_cfg_q_bw() with
+rollback and no longer defers it to queue setup, but still disables
+the Tx queue in ice_vc_cfg_txq().
+
+The MTL patch removes that step so that reconfiguring a queue does not
+tear down queues that are actively pacing media traffic.
+
+Signed-off-by: Daniel Clasen <d.clasen@qvest-digital.com>
+---
+ src/ice_virtchnl.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/ice_virtchnl.c b/src/ice_virtchnl.c
+index 6a64993..665b96f 100644
+--- a/src/ice_virtchnl.c
++++ b/src/ice_virtchnl.c
+@@ -3807,10 +3807,6 @@ ice_vc_cfg_txq(struct ice_vf *vf, struct ice_vsi *vsi, u16 q_idx,
+ 	vsi->tx_rings[q_idx]->dma = txqi->dma_ring_addr;
+ 	vsi->tx_rings[q_idx]->count = txqi->ring_len;
+ 
+-	/* Disable queue before reconfiguration */
+-	if (ice_vf_vsi_dis_single_txq(vf, vsi, q_idx, txqi->queue_id))
+-		return VIRTCHNL_STATUS_ERR_PARAM;
+-
+ 	/* Configure txtime/timestamp support if enabled */
+ 	if (txqi->flags & VIRTCHNL_TXQ_FLAG_TXTIME_ENABLED) {
+ 		struct ice_tx_ring *tx_ring = vsi->tx_rings[q_idx];
+-- 
+2.55.0
+
