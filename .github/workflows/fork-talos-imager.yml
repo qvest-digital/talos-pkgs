@@ -1,0 +1,106 @@
+name: fork-talos-imager
+
+# Fork-only. Builds the Talos installer-base and imager images from an
+# unmodified siderolabs/talos release tag with PKG_KERNEL pointing at the
+# kernel image fork-kernel-build.yml publishes, the custom kernel path the
+# Talos build supports. Every other package comes from the release's own
+# PKGS pin. The in-tree modules in the rootfs come from that kernel image,
+# so they carry the same signing key as the kernel and the fork's modules.
+#
+# TAG stays the release tag, so the Talos version the binaries report is
+# unchanged; the images are pushed as <tag><suffix>. The imager's built-in
+# default base installer is installer-base:<tag> without the suffix, so
+# pass --base-installer-image ghcr.io/<owner>/installer-base:<tag><suffix>
+# when running it.
+#
+# Not part of the upstream contribution: kres does not generate this file
+# and the upstream PR must not carry it.
+
+on:
+  push:
+    branches:
+      - fix/eevdf-revert-1.13
+    paths:
+      - .github/workflows/fork-talos-imager.yml
+  workflow_dispatch:
+    inputs:
+      talos_ref:
+        description: siderolabs/talos tag to build
+        default: v1.13.6
+      kernel:
+        description: kernel image to build in as PKG_KERNEL
+        default: ghcr.io/qvest-digital/kernel:v1.13.0-43-gd8c80cc-citest
+      suffix:
+        description: suffix appended to the pushed image tags
+        default: -eevdf-citest
+      push:
+        description: push the images
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      TALOS_REF: ${{ inputs.talos_ref || 'v1.13.6' }}
+      # A push run has no inputs; it builds the stock kernel without
+      # pushing, which checks the build without a fork kernel image.
+      KERNEL: ${{ inputs.kernel || 'ghcr.io/siderolabs/kernel:v1.13.0-43-gd8c80cc' }}
+      SUFFIX: ${{ inputs.suffix || '-stock-test' }}
+      PUSH: ${{ github.event_name == 'workflow_dispatch' && inputs.push || false }}
+    steps:
+      # Full history: the Makefile derives tags and SOURCE_DATE_EPOCH from
+      # git.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: siderolabs/talos
+          ref: ${{ inputs.talos_ref || 'v1.13.6' }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: reclaim disk and move docker to /mnt
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/lib/jvm /usr/share/swift
+          sudo systemctl stop docker
+          sudo mkdir -p /mnt/docker
+          printf '{"data-root":"/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          df -h / /mnt
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: check the kernel image
+        run: |
+          docker buildx imagetools inspect "${KERNEL}"
+
+      # amd64 only, as the fork kernel is built for amd64 only.
+      - name: build installer-base and imager
+        run: |
+          make installer-base imager PLATFORM=linux/amd64 INSTALLER_ARCH=targetarch \
+            USERNAME=${{ github.repository_owner }} TAG="${TALOS_REF}" TAG_SUFFIX_OUT="${SUFFIX}" \
+            PKG_KERNEL="${KERNEL}" PUSH="${PUSH}"
+
+      - name: summary
+        if: success() && env.PUSH == 'true'
+        run: |
+          for img in installer-base imager; do
+            ref="ghcr.io/${{ github.repository_owner }}/${img}:${TALOS_REF}${SUFFIX}"
+            digest=$(docker buildx imagetools inspect "${ref}" --format '{{ .Manifest.Digest }}')
+            echo "${ref}@${digest}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          done
