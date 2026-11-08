@@ -107,6 +107,23 @@ jobs:
           make target-kernel-build PLATFORM=linux/amd64 \
             CI_ARGS="--cache-from=type=registry,ref=${CACHE} --cache-to=type=registry,ref=${CACHE},mode=max"
 
+      # The kernel image, /boot/vmlinuz and the in-tree modules signed with
+      # the key of the build above, is what a Talos installer-base and
+      # imager take as PKG_KERNEL to boot this kernel. Its stages come from
+      # the builder's local cache of the previous step, so only the
+      # install steps run. The tag follows the module packages: the
+      # production tag from feat/mxlfs-pkg, <PKGS_TAG>-citest elsewhere.
+      - name: build and push the kernel image
+        if: steps.changes.outputs.build == 'true'
+        env:
+          PKGS_TAG: v1.13.0-43-gd8c80cc
+          SUFFIX: ${{ github.ref != 'refs/heads/feat/mxlfs-pkg' && '-test' || '' }}
+        run: |
+          CACHE="ghcr.io/${{ github.repository_owner }}/talos-pkgs-cache:kernel-${PKGS_TAG}${SUFFIX}"
+          make kernel PUSH=true PLATFORM=linux/amd64 \
+            USERNAME=${{ github.repository_owner }} TAG="${PKGS_TAG}${SUFFIX:+-citest}" \
+            CI_ARGS="--cache-from=type=registry,ref=${CACHE}"
+
       # The modules on this branch build against the cache just written.
       # workflow_run would fire only for workflow files on the default
       # branch, which carries none of the fork workflows, so this
