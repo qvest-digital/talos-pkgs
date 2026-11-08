@@ -23,7 +23,9 @@ name: fork-upstream-prebuild
 # they apply. It opens nothing.
 #
 # It lives on main because a schedule trigger runs only from the default
-# branch. Not part of any upstream contribution: kres does not generate it.
+# branch. main is otherwise a mirror of siderolabs/pkgs main; with this
+# file on it, a sync from upstream is a merge, not a fast-forward. Not
+# part of any upstream contribution: kres does not generate it.
 
 on:
   schedule:
