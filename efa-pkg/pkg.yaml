@@ -1,0 +1,47 @@
+name: efa-pkg
+variant: scratch
+shell: /bin/bash
+dependencies:
+  - stage: base
+  - stage: kernel-build
+  - image: "{{ .LLVM_IMAGE }}:{{ .TOOLS_REV }}"
+steps:
+  - sources:
+      - url: https://github.com/amzn/amzn-drivers/archive/refs/tags/efa_linux_{{ .efa_version }}.tar.gz
+        destination: efa.tar.gz
+        sha256: "{{ .efa_sha256 }}"
+        sha512: "{{ .efa_sha512 }}"
+    env:
+      ARCH: {{ if eq .ARCH "aarch64"}}arm64{{ else if eq .ARCH "x86_64" }}x86_64{{ else }}unsupported{{ end }}
+      LLVM: 1
+    prepare:
+      - |
+        tar xf efa.tar.gz --strip-components=1
+    build:
+      # Unlike the ENA driver beside it in this source tree, EFA generates
+      # its Kbuild from a template: cmake runs the conftests that decide
+      # which kernel APIs the module compiles against, and picks up
+      # Clang/LLVM from CONFIG_CC_IS_CLANG in the kernel .config.
+      #
+      # Peer-to-peer memory is off. It compiles against the NVIDIA and
+      # Neuron peer-memory interfaces, neither of which this package has,
+      # and it is not what the module is needed for here.
+      - |
+        cd kernel/linux/efa
+        cmake -B build -DKERNEL_DIR=/src -DENABLE_P2P=OFF .
+        make -C build
+    install:
+      - |
+        cd kernel/linux/efa
+        mkdir -p /rootfs/usr/lib/modules/$(cat /src/include/config/kernel.release)
+
+        make -C /src M=$(pwd)/build/src modules_install INSTALL_MOD_PATH=/rootfs/usr INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1
+    test:
+      - |
+        # https://www.kernel.org/doc/html/v4.15/admin-guide/module-signing.html#signed-modules-and-stripping
+        find /rootfs/usr/lib/modules -name '*.ko' -exec grep -FL '~Module signature appended~' {} \+
+      - |
+        fhs-validator /rootfs
+finalize:
+  - from: /rootfs
+    to: /
